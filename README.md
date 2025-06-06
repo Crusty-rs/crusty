@@ -27,6 +27,5 @@ Still in early development — getting built and improved daily.
 ## Usage (WIP)
 
 Basic idea:
-**Built with Rust. Updated daily.**
-crusty --host 192.168.1.10 --user root --pass hunter2 --cmd "uptime"
+crusty --inventory oracle-servers --user root --pass hunter2 --cmd "uptime"
 
