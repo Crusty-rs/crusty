@@ -1,3 +1,4 @@
+// Enhanced modules for KRUST
 pub mod sudo;
 pub mod os_update;
 pub mod reboot_wait;
