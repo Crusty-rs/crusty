@@ -1,8 +1,10 @@
-# Ignore build and dependency artifacts
+# Rust build artifacts
 target/
 Cargo.lock
 
-# Logs and temp
+# Logs
 *.log
-*.tmp
+
+# IDE
 .DS_Store
+*.swp
