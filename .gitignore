@@ -1,41 +1,8 @@
-# Rust build artifacts
-/target/
-**/*.rs.bk
-**/*.swp
-
-# Cargo package artifacts
+# Ignore build and dependency artifacts
+target/
 Cargo.lock
 
-# Debug and profiling
+# Logs and temp
 *.log
-*.dSYM/
-*.rlib
-*.profraw
-
-# IDE/editor
-.idea/
-.vscode/
-*.sublime-*
-*.code-workspace
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Executables
-krust
-*.out
-*.exe
-
-# Git/merge tools
-*.orig
-
-# Temp/test
-/test-output/
 *.tmp
-*.bak
-
-# Optional SSH stuff (⚠️ skip if you're using local .ssh for auth)
-.ssh/
-*.pem
-*.pub
+.DS_Store
