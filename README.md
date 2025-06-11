@@ -52,13 +52,13 @@ krust -u root -k ~/.ssh/id_rsa -i db1,db2 --json free -m | jq '.stdout'
 
 ```bash
 # Use specific key
-krust --hosts server1 --private-key ~/.ssh/deploy_key uptime
+krust -u devops --hosts server1 --private-key ~/.ssh/deploy_key uptime
 
 # Interactive password prompt
-krust --hosts legacy1 --ask-pass 'cat /etc/redhat-release'
+krust -u sample --hosts legacy1 --ask-pass 'cat /etc/redhat-release'
 
 # Explicit password (use with caution)
-krust --inventory old-server --password 'secret123' hostname
+krust -u root --inventory old-server --password 'secret123' hostname
 ```
 
 ## Output Formats
@@ -88,7 +88,7 @@ Total: 10 | Success: 9 | Failed: 1
 Stream results as NDJSON for real-time processing:
 
 ```bash
-krust --hosts cluster --json 'kubectl get nodes' | while read line; do
+--json 'kubectl get nodes' | while read line; do
   echo "$line" | jq -r '.hostname + ": " + (.exit_code // "failed")'
 done
 ```
@@ -98,41 +98,27 @@ done
 Human-readable JSON with all results:
 
 ```bash
-krust --hosts all --pretty-json --fields hostname,exit_code uptime
+--pretty-json --fields hostname,exit_code uptime
 ```
-
-### Field Selection
-
-Extract only the data you need:
-
-```bash
-# Just hostnames and stdout
-krust --hosts prod --json --fields hostname,stdout 'date +%s'
-
-# Include parsed lines array
-krust --hosts web --json --fields hostname,stdout_lines 'ls /var/log'
-```
-
-## Advanced Options
 
 ### Concurrency Control
 
 ```bash
 # Careful mode: 5 connections at a time
-krust --hosts all --concurrency 5 'apt update'
+--concurrency 5 'apt update'
 
 # Aggressive mode: 100 parallel connections
-krust --hosts cdn --concurrency 100 'nginx -t'
+--concurrency 100 'nginx -t'
 ```
 
 ### Timeouts and Retries
 
 ```bash
 # Long-running commands
-krust --hosts backup --timeout 5m 'tar -czf /backup/full.tar.gz /data'
+--timeout 5m 'tar -czf /backup/full.tar.gz /data'
 
 # Unreliable network
-krust --hosts remote --retries 5 --timeout 60s ping -c 1 google.com
+--retries 5 --timeout 60s ping -c 1 google.com
 ```
 
 ### Inventory Files
@@ -155,7 +141,7 @@ db2.internal
 
 ```bash
 #!/bin/bash
-krust --inventory prod.txt --json 'curl -sf http://localhost/health' \
+krust -u root -k ~/path/to/key --inventory prod.txt --json 'curl -sf http://localhost/health' \
   | jq -r 'select(.exit_code != 0) | .hostname' \
   | xargs -I{} alert-team "Health check failed on {}"
 ```
@@ -164,7 +150,7 @@ krust --inventory prod.txt --json 'curl -sf http://localhost/health' \
 
 ```bash
 for batch in $(cat hosts.txt | xargs -n 10); do
-  krust --hosts "$batch" --concurrency 5 'sudo systemctl restart app'
+  krust -u root -k ~/path/to/key --hosts "$batch" --concurrency 5 'sudo systemctl restart app'
   sleep 30
 done
 ```
@@ -172,7 +158,7 @@ done
 ### Audit Compliance
 
 ```bash
-krust --inventory all-servers.txt --json --pretty-json \
+krust -u root -k ~/path/to/key--inventory all-servers.txt --json --pretty-json \
   'grep PermitRootLogin /etc/ssh/sshd_config' \
   > ssh-audit-$(date +%Y%m%d).json
 ```
@@ -214,16 +200,16 @@ Real-world usage patterns for production environments.
 
 ```bash
 # Single host
-krust --hosts server1.example.com uptime
+krust -u root -k ~/path/to/key --hosts server1.example.com uptime
 
 # Multiple hosts
-krust --hosts web1,web2,web3 'df -h /'
+krust -u root -k ~/path/to/key --hosts web1,web2,web3 'df -h /'
 
 # From inventory file
-krust --inventory production.txt 'free -m'
+krust -u root -k ~/path/to/key --inventory production.txt 'free -m'
 
 # Custom SSH port
-krust --hosts server1:2222 hostname
+krust -u root -k ~/path/to/key --hosts server1:2222 hostname
 ```
 
 ### Authentication
@@ -248,7 +234,7 @@ krust --hosts cluster 'kubectl get nodes'
 ### Human-Readable (Default)
 
 ```bash
-$ krust --hosts web1,web2,db1 'systemctl is-active nginx'
+$ krust -u root -k ~/path/to/key--hosts web1,web2,db1 'systemctl is-active nginx'
 
 [3/3] hosts completed
 
@@ -270,7 +256,7 @@ Total: 3 | Success: 2 | Failed: 1
 Perfect for real-time monitoring:
 
 ```bash
-krust --hosts all --json 'curl -s -o /dev/null -w "%{http_code}" http://localhost/health' | \
+krust --u root -k ~/path/to/key --hosts all --json 'curl -s -o /dev/null -w "%{http_code}" http://localhost/health' | \
 while read line; do
   host=$(echo "$line" | jq -r .hostname)
   code=$(echo "$line" | jq -r .stdout)
@@ -280,52 +266,5 @@ while read line; do
 done
 ```
 
-### Pretty JSON
-
-For reports and documentation:
-
-```bash
-krust --hosts prod --pretty-json --fields hostname,stdout,duration_ms \
-  'grep "^MemAvailable" /proc/meminfo' > memory-report.json
-```
-
-### Field Selection
-
-Extract specific data:
-
-```bash
-# Just hostnames that succeeded
-krust --hosts all --json --fields hostname,exit_code 'systemctl is-active postgresql' | \
-  jq -r 'select(.exit_code == 0) | .hostname'
-
-# Get stdout as array of lines
-krust --hosts web --json --fields hostname,stdout_lines 'ls -1 /var/log/*.log' | \
-  jq -r '.hostname as $h | .stdout_lines[] | $h + ":" + .'
-```
-
-## Production Patterns
-
-### Health Monitoring
-
-```bash
-#!/bin/bash
-# health-check.sh - Run every minute via cron
-
-HOSTS="monitoring/web-servers.txt"
-THRESHOLD=0.8
-
-results=$(krust --inventory "$HOSTS" --json --timeout 5s \
-  'curl -s http://localhost/health | jq -r .status')
-
-total=$(echo "$results" | wc -l)
-healthy=$(echo "$results" | jq -r 'select(.exit_code == 0 and .stdout == "ok")' | wc -l)
-
-if (( $(echo "$healthy / $total < $THRESHOLD" | bc -l) )); then
-  echo "CRITICAL: Only $healthy/$total hosts healthy"
-  echo "$results" | jq -r 'select(.stdout != "ok") | .hostname + ": " + .stderr'
-fi
-```
-
 ## License
-
 MIT
