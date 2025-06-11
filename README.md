@@ -58,7 +58,7 @@ krust --hosts server1 --private-key ~/.ssh/deploy_key uptime
 krust --hosts legacy1 --ask-pass 'cat /etc/redhat-release'
 
 # Explicit password (use with caution)
-krust --hosts old-server --password 'secret123' hostname
+krust --inventory old-server --password 'secret123' hostname
 ```
 
 ## Output Formats
