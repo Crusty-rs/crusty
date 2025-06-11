@@ -1,24 +1,37 @@
 [package]
 name = "krust"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Lightning-fast parallel SSH command executor"
+license = "MIT"
 
 [dependencies]
+# Core functionality
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 ssh2 = "0.9"
+
+# Output and logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+
+# Security
 zeroize = "1.5"
 rpassword = "7.0"
+
+# Async utilities
 futures = "0.3"
 
 [profile.release]
 lto = true
 codegen-units = 1
 strip = true
-opt-level = "z"
+opt-level = 3  # Changed from "z" to 3 for better performance
+
+[profile.release-minimal]
+inherits = "release"
+opt-level = "z"  # Size-optimized build option

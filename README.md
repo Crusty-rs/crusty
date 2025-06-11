@@ -1,109 +1,331 @@
-# krust 🦀
+# krust
 
-A blazing-fast, minimal parallel SSH runner — built in **Rust** for real-world automation, reliability, and control.
+Fast parallel SSH command executor. Built in Rust for fast experiment or actions.
 
----
+## What It Does
 
-## 🚀 Overview
+`krust` runs shell commands across hundreds of servers simultaneously. Nothing more, nothing less.
 
-**krust** is a Rust-based parallel SSH command runner built for modern DevOps workflows. It executes shell commands over SSH across many machines **concurrently** with real-time output streaming, minimal latency, and zero bloat.
+- Pure SSH command execution
+- True parallel operations with controlled concurrency  
+- Smart retry logic for network failures
+- Clean output formats (text, JSON, filtered)
+- Zero dependencies on remote hosts
 
----
+## Why
 
-## ✅ What’s New
+When you need to run `df -h` or 'touch file' on 1000 servers, waiting 10 minutes for serial execution is not worth it. `krust` completes the same task in under 10 seconds.
 
-- True async parallelism using `FuturesUnordered` + `Semaphore`
-- Real streaming output with **NDJSON**
-- Hardened SSH support: agent, timeout, retries
-- Improved error handling & retry logic
-- Clean minimal JSON structure for automation
-- Simpler, focused module system (`sudo`, `os-update`, `reboot-wait`)
-- No memory accumulation over large operations
-- Clear exit codes and better CLI help
+## Installation
 
----
+```bash
+cargo install krust
+```
 
-## 🛠️ Upcoming Focus Areas
+Or build from source:
 
-We're actively improving:
+```bash
+cargo build --release
+cp target/release/krust /usr/local/bin/
+```
 
-- 🔄 Battle-tested retry behavior (handle flaky networks better)
-- 🧪 Module unit testing & script validation
-- 🚀 SSH connection speed improvements (timeouts, retries, pooling ideas)
-- 📚 Better documentation on flags, module usage, and auth setup
-- 🧰 User experience (UX) improvements (clear errors, flag help, progress)
-- 🧩 Thinking of new modules (feedback welcome)
-- 📤 Support for people who want JSON: just add `--json` for streaming NDJSON
+## Basic Usage
 
----
+```bash
+# Check disk space on web servers
+krust --hosts web1,web2,web3 df -h
 
-## 📦 CLI Examples
+# Restart nginx across all production hosts  
+krust --inventory prod-hosts.txt --user deploy 'sudo systemctl restart nginx'
 
-# Basic parallel execution
-krust --hosts web1,web2,web3 --concurrency 20 uptime
+# Get memory stats with JSON output for automation
+krust --hosts db1,db2 --json free -m | jq '.stdout'
+```
 
-# With inventory file
-krust --inventory hosts.txt --user deploy 'systemctl status nginx'
+## Authentication
 
-# Streaming JSON output
-krust --hosts prod --json 'df -h' | jq -r '.hostname + ": " + .stdout'
+`krust` intelligently tries authentication methods in order:
 
-# Using built-in modules
-krust --hosts all sudo alice --nopass
-krust --hosts prod os-update --security-only
-krust --hosts db reboot-wait --check
+1. SSH key (default: `~/.ssh/id_rsa`)
+2. SSH agent
+3. Password (if provided)
 
-# Custom timeout & retries
-krust --hosts flaky --retries 5 --timeout 60s 'curl http://localhost/health'
+```bash
+# Use specific key
+krust --hosts server1 --private-key ~/.ssh/deploy_key uptime
 
----
+# Interactive password prompt
+krust --hosts legacy1 --ask-pass 'cat /etc/redhat-release'
 
-## 🔐 SSH Features
+# Explicit password (use with caution)
+krust --hosts old-server --password 'secret123' hostname
+```
 
-- DNS resolution with timeout
-- Per-host read & write timeout control
-- SSH agent + key file auth
-- Password auth (optional, secure)
-- Retry logic for transient failures
+## Output Formats
 
----
+### Default Text Output
 
-## 📈 Output Format
+Clean, colored output optimized for human reading:
 
-If `--json` is passed, krust prints each result as **one line of JSON** (NDJSON), like:
+```
+[10/10] hosts completed
 
-{"hostname":"host1","stdout":"ok","stderr":null,"exit_code":0,"timestamp":"..."}
+=== EXECUTION SUMMARY ===
+Total: 10 | Success: 9 | Failed: 1
 
-No memory bloat: results are streamed immediately.
+✓ SUCCESSFUL HOSTS:
+  web1 (127ms):
+    Linux web1 5.15.0-92-generic
+  web2 (143ms):
+    Linux web2 5.15.0-92-generic
 
----
+✗ FAILED HOSTS:
+  web3: Connection timeout
+```
 
-## 📁 Module Architecture
+### JSON Output
 
-Modules are easy to extend — just define `build_command()` in `modules/your_module.rs` and register in `modules/mod.rs`.
+Stream results as NDJSON for real-time processing:
 
-Current modules:
+```bash
+krust --hosts cluster --json 'kubectl get nodes' | while read line; do
+  echo "$line" | jq -r '.hostname + ": " + (.exit_code // "failed")'
+done
+```
 
-- `sudo`: grant sudoer access to a user
-- `os-update`: run apt/yum updates
-- `reboot-wait`: delay or check reboot requirement
+### Pretty JSON
 
----
+Human-readable JSON with all results:
 
-## 🧪 Test & Dev Roadmap
+```bash
+krust --hosts all --pretty-json --fields hostname,exit_code uptime
+```
 
-- Write `#[test]` for all module logic
-- Start `bat`-style CLI regression tests
-- Split tests: `unit`, `integration`, `ssh-mock`
+### Field Selection
 
----
+Extract only the data you need:
 
-## 🤝 Contributing
+```bash
+# Just hostnames and stdout
+krust --hosts prod --json --fields hostname,stdout 'date +%s'
 
-Got feedback? Found a bug? Want a new module?
-Open an issue or PR. Let's build krust into a truly powerful DevOps hammer 🔨🤖🔧
+# Include parsed lines array
+krust --hosts web --json --fields hostname,stdout_lines 'ls /var/log'
+```
 
----
+## Advanced Options
 
-> Made in Rust. Runs fast. Talks SSH. Solves problems.
+### Concurrency Control
 
+```bash
+# Careful mode: 5 connections at a time
+krust --hosts all --concurrency 5 'apt update'
+
+# Aggressive mode: 100 parallel connections
+krust --hosts cdn --concurrency 100 'nginx -t'
+```
+
+### Timeouts and Retries
+
+```bash
+# Long-running commands
+krust --hosts backup --timeout 5m 'tar -czf /backup/full.tar.gz /data'
+
+# Unreliable network
+krust --hosts remote --retries 5 --timeout 60s ping -c 1 google.com
+```
+
+### Inventory Files
+
+Simple text format, one host per line:
+
+```
+# web-servers.txt
+web1.example.com
+web2.example.com:2222  # custom port
+10.0.1.50
+# db servers
+db1.internal
+db2.internal
+```
+
+## Production Patterns
+
+### Health Checks
+
+```bash
+#!/bin/bash
+krust --inventory prod.txt --json 'curl -sf http://localhost/health' \
+  | jq -r 'select(.exit_code != 0) | .hostname' \
+  | xargs -I{} alert-team "Health check failed on {}"
+```
+
+### Rolling Restarts
+
+```bash
+for batch in $(cat hosts.txt | xargs -n 10); do
+  krust --hosts "$batch" --concurrency 5 'sudo systemctl restart app'
+  sleep 30
+done
+```
+
+### Audit Compliance
+
+```bash
+krust --inventory all-servers.txt --json --pretty-json \
+  'grep PermitRootLogin /etc/ssh/sshd_config' \
+  > ssh-audit-$(date +%Y%m%d).json
+```
+
+## Design Philosophy
+
+- **Minimal**: No plugins, modules, or remote dependencies
+- **Fast**: Parallel by default, optimized for thousands of hosts
+- **Reliable**: Smart retries, proper timeouts, clear error reporting
+- **Composable**: Clean JSON output works with standard Unix tools
+
+
+## Error Handling
+
+`krust` exits with code 1 if any host fails. Parse JSON output for granular error handling:
+
+```bash
+if ! krust --hosts critical --json 'systemctl is-active postgresql' > results.json; then
+  failed=$(jq -r 'select(.exit_code != 0) | .hostname' results.json)
+  echo "PostgreSQL down on: $failed"
+fi
+```
+
+## Contributing
+
+We value simplicity and performance. Before adding features, ask:
+
+1. Does this keep `krust` minimal?
+2. Does it make common tasks easier?
+3. Will it work reliably in production?
+
+# krust Examples
+
+Real-world usage patterns for production environments.
+
+## Quick Start
+
+### Basic Commands
+
+```bash
+# Single host
+krust --hosts server1.example.com uptime
+
+# Multiple hosts
+krust --hosts web1,web2,web3 'df -h /'
+
+# From inventory file
+krust --inventory production.txt 'free -m'
+
+# Custom SSH port
+krust --hosts server1:2222 hostname
+```
+
+### Authentication
+
+```bash
+# Default key (~/.ssh/id_rsa or id_ed25519)
+krust --hosts prod1 whoami
+
+# Specific key
+krust --hosts secure1 --private-key ~/.ssh/deploy_key id
+
+# Password authentication (interactive)
+krust --hosts legacy1 --ask-pass 'cat /etc/os-release'
+
+# SSH agent (default if no key found)
+ssh-add ~/.ssh/special_key
+krust --hosts cluster 'kubectl get nodes'
+```
+
+## Output Formats
+
+### Human-Readable (Default)
+
+```bash
+$ krust --hosts web1,web2,db1 'systemctl is-active nginx'
+
+[3/3] hosts completed
+
+=== EXECUTION SUMMARY ===
+Total: 3 | Success: 2 | Failed: 1
+
+✓ SUCCESSFUL HOSTS:
+  web1 (89ms):
+    active
+  web2 (92ms):
+    active
+
+✗ FAILED HOSTS:
+  db1: Unit nginx.service could not be found.
+```
+
+### JSON Streaming
+
+Perfect for real-time monitoring:
+
+```bash
+krust --hosts all --json 'curl -s -o /dev/null -w "%{http_code}" http://localhost/health' | \
+while read line; do
+  host=$(echo "$line" | jq -r .hostname)
+  code=$(echo "$line" | jq -r .stdout)
+  if [ "$code" != "200" ]; then
+    echo "ALERT: $host returned $code"
+  fi
+done
+```
+
+### Pretty JSON
+
+For reports and documentation:
+
+```bash
+krust --hosts prod --pretty-json --fields hostname,stdout,duration_ms \
+  'grep "^MemAvailable" /proc/meminfo' > memory-report.json
+```
+
+### Field Selection
+
+Extract specific data:
+
+```bash
+# Just hostnames that succeeded
+krust --hosts all --json --fields hostname,exit_code 'systemctl is-active postgresql' | \
+  jq -r 'select(.exit_code == 0) | .hostname'
+
+# Get stdout as array of lines
+krust --hosts web --json --fields hostname,stdout_lines 'ls -1 /var/log/*.log' | \
+  jq -r '.hostname as $h | .stdout_lines[] | $h + ":" + .'
+```
+
+## Production Patterns
+
+### Health Monitoring
+
+```bash
+#!/bin/bash
+# health-check.sh - Run every minute via cron
+
+HOSTS="monitoring/web-servers.txt"
+THRESHOLD=0.8
+
+results=$(krust --inventory "$HOSTS" --json --timeout 5s \
+  'curl -s http://localhost/health | jq -r .status')
+
+total=$(echo "$results" | wc -l)
+healthy=$(echo "$results" | jq -r 'select(.exit_code == 0 and .stdout == "ok")' | wc -l)
+
+if (( $(echo "$healthy / $total < $THRESHOLD" | bc -l) )); then
+  echo "CRITICAL: Only $healthy/$total hosts healthy"
+  echo "$results" | jq -r 'select(.stdout != "ok") | .hostname + ": " + .stderr'
+fi
+```
+
+## License
+
+MIT
