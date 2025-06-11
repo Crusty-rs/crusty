@@ -1,6 +1,6 @@
 # krust
 
-Fast parallel SSH command executor. Built in Rust for fast experiment or actions.
+Fast parallel SSH command executor. Built in Rust for fast experiments or actions.
 
 ## What It Does
 
@@ -32,14 +32,14 @@ cp target/release/krust /usr/local/bin/
 ## Basic Usage
 
 ```bash
-# Check disk space on web servers
-krust --hosts web1,web2,web3 df -h
+# Check disk space on some hosts
+krust -u root -k ~/.ssh/id_rsa --hosts servera,serverb,serverc df -h
 
-# Restart nginx across all production hosts  
-krust --inventory prod-hosts.txt --user deploy 'sudo systemctl restart nginx'
+# Restart nginx across all production hosts inventory  
+krust -u deploy -k ~/.ssh/id_rsa -i prod-hosts.txt 'sudo systemctl restart nginx'
 
 # Get memory stats with JSON output for automation
-krust --hosts db1,db2 --json free -m | jq '.stdout'
+krust -u root -k ~/.ssh/id_rsa -i db1,db2 --json free -m | jq '.stdout'
 ```
 
 ## Authentication
