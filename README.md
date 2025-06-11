@@ -146,13 +146,10 @@ krust -u root -k ~/path/to/key --inventory prod.txt --json 'curl -sf http://loca
   | xargs -I{} alert-team "Health check failed on {}"
 ```
 
-### Rolling Restarts
+### Reboot
 
 ```bash
-for batch in $(cat hosts.txt | xargs -n 10); do
-  krust -u root -k ~/path/to/key --hosts "$batch" --concurrency 5 'sudo systemctl restart app'
-  sleep 30
-done
+krust -u root -k ~/path/to/key --inventory prod.txt reboot
 ```
 
 ### Audit Compliance
@@ -249,21 +246,6 @@ Total: 3 | Success: 2 | Failed: 1
 
 ✗ FAILED HOSTS:
   db1: Unit nginx.service could not be found.
-```
-
-### JSON Streaming
-
-Perfect for real-time monitoring:
-
-```bash
-krust --u root -k ~/path/to/key --hosts all --json 'curl -s -o /dev/null -w "%{http_code}" http://localhost/health' | \
-while read line; do
-  host=$(echo "$line" | jq -r .hostname)
-  code=$(echo "$line" | jq -r .stdout)
-  if [ "$code" != "200" ]; then
-    echo "ALERT: $host returned $code"
-  fi
-done
 ```
 
 ## License
